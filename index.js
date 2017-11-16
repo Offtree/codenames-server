@@ -73,7 +73,7 @@ io.on('connection', function (socket) {
   });
   socket.on('joinParty', function (partyId) {
     if (
-      socket.rooms[partyId] !== undefined &&
+      socket.rooms[partyId] === undefined &&
       io.sockets.adapter.rooms[partyId] !== undefined
     ) {
       console.log('User joined a party', partyId);
