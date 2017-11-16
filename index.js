@@ -87,7 +87,3 @@ io.on('connection', function (socket) {
     }
   });
 });
-
-socketServer.listen(65080, () => {
-  console.log('Socket listening on *:', 65080);
-});
