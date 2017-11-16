@@ -10,50 +10,18 @@ const codenames = require('./codenames');
 var http = require('http');
 var app = express();
 var server = http.Server(app);
-var socketApp = express();
-var socketServer = http.Server(socketApp);
-var io = socketIo(socketServer);
+var io = socketIo(server);
 
-// [START external_ip]
-// In order to use websockets on App Engine, you need to connect directly to
-// application instance using the instance's public external IP. This IP can
-// be obtained from the metadata server.
-var METADATA_NETWORK_INTERFACE_URL = 'http://metadata/computeMetadata/v1/' +
-  'instance/network-interfaces/0/access-configs/0/external-ip';
-
-function getExternalIp(cb) {
-  var options = {
-    url: METADATA_NETWORK_INTERFACE_URL,
-    headers: {
-      'Metadata-Flavor': 'Google'
-    }
-  };
-
-  request(options, function (err, resp, body) {
-    if (err || resp.statusCode !== 200) {
-      console.log('Error while talking to metadata server, assuming localhost');
-      return cb('localhost');
-    }
-    console.log('Successfully found a external-ip', body);
-    return cb(body);
-  });
-}
-// [END external_ip]
-
-app.use(express.static(path.resolve(__dirname, 'build')));
 app.get('/', function (req, res) {
-  console.log('here?');
-  getExternalIp(function (externalIp) {
-    console.log('getting this', externalIp);
-    res.sendFile(path.resolve(__dirname, 'build', 'index.html'));
-  });
+  res.sendFile(path.resolve(__dirname, 'build', 'index.html'));
 });
+app.use(express.static(path.resolve(__dirname, 'build')));
+
 const PORT = process.env.PORT ? process.env.PORT : 3000;
 server.listen(PORT, function () {
   console.log('App listening on port %s', server.address().port);
   console.log('Press Ctrl+C to quit.');
 });
-
 
 // SOCKET SETUP
 const GameManager = codenames.GameManager;
