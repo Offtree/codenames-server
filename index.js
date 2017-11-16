@@ -18,7 +18,7 @@ app.get('/', function (req, res) {
 app.use(express.static(path.resolve(__dirname, 'build')));
 
 const PORT = process.env.PORT ? process.env.PORT : 3000;
-server.listen(PORT, function () {
+server.listen(PORT, () => {
   console.log('App listening on port %s', server.address().port);
   console.log('Press Ctrl+C to quit.');
 });
@@ -27,7 +27,7 @@ server.listen(PORT, function () {
 const GameManager = codenames.GameManager;
 const gameManagers = new buckets.Dictionary();
 
-const applyGameToSocket = (socket, partyId) => {
+const applyGameToSocket = (socket, partyId, username) => {
   socket.join(partyId);
 
   let gameManager = gameManagers.get(partyId);
@@ -36,9 +36,10 @@ const applyGameToSocket = (socket, partyId) => {
     gameManagers.set(partyId, gameManager);
   };
   
-  // Subscribe to changes in game state
-  gameManager.gameChangeObservable.subscribe(gameState => {
-    socket.emit('gameChanged', gameState);
+  // Add user to the game
+  gameManager.joinGame({
+    username,
+    socket
   });
 
   // Starts a new game for the room
@@ -59,25 +60,25 @@ const applyGameToSocket = (socket, partyId) => {
 
 
 io.on('connection', function (socket) {
-  socket.on('makeParty', function (partyId) {
+  socket.on('makeParty', ([partyId, username]) => {
     if(io.sockets.adapter.rooms[partyId] === undefined) {
       console.log('User made a new party', partyId);
-      applyGameToSocket(socket, partyId);
+      applyGameToSocket(socket, partyId, username);
       socket.emit('inPartyStatus', true);
       let gameManager = gameManagers.get(partyId);
-      socket.emit('gameChanged', gameManager.gameState);
+      gameManager.setNewGame();
     } else {
       console.log('User failed to make a new party', partyId);
       socket.emit('inPartyStatus', false);
     }
   });
-  socket.on('joinParty', function (partyId) {
+  socket.on('joinParty', ([partyId, username]) => {
     if (
       socket.rooms[partyId] === undefined &&
       io.sockets.adapter.rooms[partyId] !== undefined
     ) {
       console.log('User joined a party', partyId);
-      applyGameToSocket(socket, partyId);
+      applyGameToSocket(socket, partyId, username);
       socket.emit('inPartyStatus', true);
       let gameManager = gameManagers.get(partyId);
       socket.emit('gameChanged', gameManager.gameState);

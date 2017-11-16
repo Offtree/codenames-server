@@ -1,49 +1,57 @@
 const _ = require('lodash');
-const rxjs = require('rxjs');
 const words = require('./words');
-const Observable = rxjs.Observable;
-const Subject = rxjs.Subject;
-
-const INITIAL_STAGED_GUESS = [undefined, undefined];
-const BLUE_TEAM = 'B';
-const RED_TEAM = 'R';
-const BOMB = 'X';
-const NOONE = 'N';
+const CodenamesConstants = require('./contants');
 
 class GameManager {
-
   constructor() {
-    this.gameChangeObservable = new Subject();
+    this.inProgress = true;
+    this.allPlayers = [];
     this.setNewGame();
   }
 
+  joinGame(newPlayer) {
+    this.allPlayers.push(
+      Object.assign({
+        ready: this.inProgress,
+        isMaster: true
+      }, newPlayer)
+    );
+  }
+
+  leaveGame(players) {
+    // Socket leaves game
+  }
+
   setNewGame() {
+    this.inProgress = true;
     this.buildPlayerGrid();
     this.buildMasterCard();
-    this.stagedGuess = INITIAL_STAGED_GUESS;
+    this.stagedGuess = CodenamesConstants.INITIAL_STAGED_GUESS;
     this.submittedGuesses = [];
     this.notifyGameChange();
   }
 
-  get gameState() {
+  getGameState(isMaster) {
     return {
+      inProgress: this.inProgress,
+      isMaster: isMaster,
       playerGrid: this.playerGrid,
-      masterCard: this.masterCard,
+      masterCard: isMaster ? this.masterCard : undefined,
       submittedGuesses: this.submittedGuesses,
       stagedGuess: this.stagedGuess
     }
   }
 
   getOwnerAtCoord(coord) {
-    let owner = NOONE;
-    if (_.some(this.masterCard.placements[RED_TEAM], goal => _.isEqual(goal, coord))) {
-      owner = RED_TEAM;
+    let owner = CodenamesConstants.NOONE;
+    if (_.some(this.masterCard.placements[CodenamesConstants.RED_TEAM], goal => _.isEqual(goal, coord))) {
+      owner = CodenamesConstants.RED_TEAM;
     }
-    if (_.some(this.masterCard.placements[BLUE_TEAM], goal => _.isEqual(goal, coord))) {
-      owner = BLUE_TEAM;
+    if (_.some(this.masterCard.placements[CodenamesConstants.BLUE_TEAM], goal => _.isEqual(goal, coord))) {
+      owner = CodenamesConstants.BLUE_TEAM;
     } 
-    if (_.some(this.masterCard.placements[BOMB], goal => _.isEqual(goal, coord))) {
-      owner = BOMB;
+    if (_.some(this.masterCard.placements[CodenamesConstants.BOMB], goal => _.isEqual(goal, coord))) {
+      owner = CodenamesConstants.BOMB;
     } 
     return owner;
   }
@@ -56,13 +64,13 @@ class GameManager {
         })
       })
     );
-    const firstPlayer = _.sample([BLUE_TEAM, RED_TEAM]);
+    const firstPlayer = _.sample([CodenamesConstants.BLUE_TEAM, CodenamesConstants.RED_TEAM]);
     this.masterCard = {
       firstPlayer,
       placements: {
-        [RED_TEAM]: grid.splice(0, firstPlayer === RED_TEAM ? 6 : 5),
-        [BLUE_TEAM]: grid.splice(0, firstPlayer === RED_TEAM ? 5 : 6),
-        [BOMB]: grid.splice(0, 1),
+        [CodenamesConstants.RED_TEAM]: grid.splice(0, firstPlayer === CodenamesConstants.RED_TEAM ? 6 : 5),
+        [CodenamesConstants.BLUE_TEAM]: grid.splice(0, firstPlayer === CodenamesConstants.RED_TEAM ? 5 : 6),
+        [CodenamesConstants.BOMB]: grid.splice(0, 1),
       }
     };
   }
@@ -75,7 +83,9 @@ class GameManager {
   }
 
   notifyGameChange() {
-    this.gameChangeObservable.next(this.gameState)
+    this.allPlayers.forEach(player => {
+      player.socket.emit('gameChanged', this.getGameState(player.isMaster));
+    });
   }
 
   handleSubmitGuess(coord) {
@@ -83,7 +93,7 @@ class GameManager {
       coordinate: coord,
       owner: this.getOwnerAtCoord(coord)
     });
-    this.stagedGuess = INITIAL_STAGED_GUESS;
+    this.stagedGuess = CodenamesConstants.INITIAL_STAGED_GUESS;
     this.notifyGameChange();
   }
   
