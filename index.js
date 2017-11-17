@@ -52,9 +52,20 @@ const applyGameToSocket = (socket, partyId, username) => {
     gameManager.handleStageGuess(coord);
   });
 
-  // Submit a tile for turn
+  // Stage a new tile for submit
   socket.on('submitGuess', (coord) => {
     gameManager.handleSubmitGuess(coord);
+  });
+
+  // Leave game
+  socket.on('disconnect', () => {
+    gameManager.handlePlayerLeave(socket.id);
+  })
+
+  // Submit a tile for turn
+  socket.on('playersChanged', (playerStatus) => {
+    const player = gameManager.getPlayerFromSocket(socket.id)
+    gameManager.updatePlayerStatus(player.id, playerStatus)
   });
 }
 
@@ -64,12 +75,12 @@ io.on('connection', function (socket) {
     if(io.sockets.adapter.rooms[partyId] === undefined) {
       console.log('User made a new party', partyId);
       applyGameToSocket(socket, partyId, username);
-      socket.emit('inPartyStatus', true);
       let gameManager = gameManagers.get(partyId);
+      socket.emit('inPartyStatus', gameManager.getPlayerFromSocket(socket.id).id);
       gameManager.setNewGame();
     } else {
       console.log('User failed to make a new party', partyId);
-      socket.emit('inPartyStatus', false);
+      socket.emit('inPartyStatus', null);
     }
   });
   socket.on('joinParty', ([partyId, username]) => {
@@ -79,12 +90,13 @@ io.on('connection', function (socket) {
     ) {
       console.log('User joined a party', partyId);
       applyGameToSocket(socket, partyId, username);
-      socket.emit('inPartyStatus', true);
       let gameManager = gameManagers.get(partyId);
-      socket.emit('gameChanged', gameManager.gameState);
+      const player = gameManager.getPlayerFromSocket(socket.id);
+      socket.emit('inPartyStatus', player.id);
+      socket.emit('gameChanged', gameManager.getGameState(player.isMaster));
     } else {
       console.log('User failed to join a party', partyId);
-      socket.emit('inPartyStatus', false);
+      socket.emit('inPartyStatus', null);
     }
   });
 });

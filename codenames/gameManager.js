@@ -1,10 +1,11 @@
 const _ = require('lodash');
-const words = require('./words');
 const CodenamesConstants = require('./contants');
+const Utils = require('./utils');
 
 class GameManager {
   constructor() {
-    this.inProgress = true;
+    this.playerIdTracker = 0;
+    this.inProgress = false;
     this.allPlayers = [];
     this.setNewGame();
   }
@@ -12,23 +13,35 @@ class GameManager {
   joinGame(newPlayer) {
     this.allPlayers.push(
       Object.assign({
-        ready: this.inProgress,
-        isMaster: true
+        id: this.playerIdTracker.toString(),
+        isReady: this.inProgress,
+        isMaster: false
       }, newPlayer)
     );
-  }
-
-  leaveGame(players) {
-    // Socket leaves game
+    this.playerIdTracker ++;
+    this.notifyPlayersChange();
   }
 
   setNewGame() {
-    this.inProgress = true;
-    this.buildPlayerGrid();
-    this.buildMasterCard();
+    this.inProgress = false;
+    this.playerGrid = Utils.buildPlayerGrid();
+    this.masterCard = Utils.buildMasterCard();
     this.stagedGuess = CodenamesConstants.INITIAL_STAGED_GUESS;
     this.submittedGuesses = [];
+    this.allPlayers.map(player => {
+      return Object.assign(player, {
+        isReady: false
+      })
+    });
     this.notifyGameChange();
+    this.notifyPlayersChange();
+  }
+
+  checkAllReady() {
+    if(_.every(this.allPlayers, { isReady: true })) {
+      this.inProgress = true;
+      this.notifyGameChange();
+    }
   }
 
   getGameState(isMaster) {
@@ -56,38 +69,13 @@ class GameManager {
     return owner;
   }
 
-  buildMasterCard() {
-    const grid = _.shuffle(
-      _.flatMap(_.range(0, 5), row => {
-        return _.map(_.range(0, 5), col => {
-          return [row, col]
-        })
-      })
-    );
-    const firstPlayer = _.sample([CodenamesConstants.BLUE_TEAM, CodenamesConstants.RED_TEAM]);
-    this.masterCard = {
-      firstPlayer,
-      placements: {
-        [CodenamesConstants.RED_TEAM]: grid.splice(0, firstPlayer === CodenamesConstants.RED_TEAM ? 6 : 5),
-        [CodenamesConstants.BLUE_TEAM]: grid.splice(0, firstPlayer === CodenamesConstants.RED_TEAM ? 5 : 6),
-        [CodenamesConstants.BOMB]: grid.splice(0, 1),
-      }
-    };
+  getPlayerFromSocket(socketId) {
+    return _.find(this.allPlayers, (player) => {
+      return socketId === player.socket.id
+    })
   }
 
-  buildPlayerGrid() {
-    this.playerGrid = _.chunk(
-      _.sampleSize(words, 25),
-      5
-    );
-  }
-
-  notifyGameChange() {
-    this.allPlayers.forEach(player => {
-      player.socket.emit('gameChanged', this.getGameState(player.isMaster));
-    });
-  }
-
+  // SOCKET INS
   handleSubmitGuess(coord) {
     this.submittedGuesses.push({
       coordinate: coord,
@@ -100,6 +88,45 @@ class GameManager {
   handleStageGuess(coord) {
     this.stagedGuess = coord;
     this.notifyGameChange();
+  }
+
+  handlePlayerLeave(socketId) {
+    this.allPlayers = _.filter(this.allPlayers,
+      (player) => player.socket.id !== socketId
+    );
+    this.notifyPlayersChange();
+  }
+
+  updatePlayerStatus(playerId, playerStatus) {
+    this.allPlayers = this.allPlayers.map(player => {
+      return {
+        isReady: player.id === playerId ? playerStatus.isReady : player.isReady,
+        isMaster: player.id === playerId ? playerStatus.isMaster : player.isMaster,
+        username: player.username,
+        socket: player.socket,
+        id: player.id
+      }
+    });
+    this.notifyPlayersChange();
+    this.checkAllReady();
+  }
+
+  // SOCKET OUTS
+  notifyGameChange() {
+    this.allPlayers.forEach(player => {
+      player.socket.emit('gameChanged', this.getGameState(player.isMaster));
+    });
+  }
+
+  notifyPlayersChange() {
+    this.allPlayers.forEach(player => {
+      player.socket.emit('playersChanged', _.map(this.allPlayers, (player) => ({
+        isReady: player.isReady,
+        isMaster: player.isMaster,
+        username: player.username,
+        id: player.id
+      })));
+    });
   }
 }
 
