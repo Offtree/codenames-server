@@ -1,4 +1,4 @@
-module.exports = [
+const CODENAMES_ORIGINAL = [
   'AFRICA',
   'AGENT',
   'AIR',
@@ -400,3 +400,5 @@ module.exports = [
   'WORM',
   'YARD'
 ];
+
+module.exports = CODENAMES_ORIGINAL;
